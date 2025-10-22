@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dibujos Geométricos Interactivos y Arrastrables</title>
+    <!-- Carga de Tailwind CSS para un diseño moderno -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Definición de la fuente y estilos base */
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            background-color: #f7fafc; /* Gris claro de Tailwind */
+        }
+        /* Estilo para el canvas */
+        #miCanvas {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border: 4px solid #4a5568; /* Gris oscuro */
+            cursor: grab; /* Indica que los elementos son arrastrables */
+        }
+        .resizing {
+            cursor: nwse-resize !important;
+        }
+        .rotating {
+            cursor: move !important; /* Cursor de movimiento para rotación */
+        }
+        .dragging {
+            cursor: grabbing !important;
+        }
+    </style>
+</head>
+<body class="p-6 flex flex-col items-center justify-start">
+
+    <header class="text-center mb-8">
+        <h1 class="text-4xl font-extrabold text-gray-800 mb-2">
+            📐 Editor Geométrico Avanzado
+        </h1>
+        <p class="text-gray-600">
+            Crea figuras, arrástralas, redimensiona y rótalas.
+        </p>
+        <p class="text-sm text-gray-500 mt-1">
+            (Escala: 20 píxeles = 1 cm)
+        </p>
+    </header>
+
+    <!-- Controles de Creación y Limpieza -->
+    <div class="mb-6 flex flex-wrap justify-center gap-4">
+        <button onclick="addShape('circle')" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 transform hover:scale-105 shadow-md">
+            Añadir Círculo
+        </button>
+        <button onclick="addShape('square')" class="bg-green-500 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 transform hover:scale-105 shadow-md">
+            Añadir Cuadrado
+        </button>
+        <button onclick="addShape('triangle')" class="bg-pink-500 hover:bg-pink-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 transform hover:scale-105 shadow-md">
+            Añadir Triángulo
+        </button>
+        <button onclick="clearCanvas()" class="bg-red-500 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 transform hover:scale-105 shadow-md">
+            Limpiar Todo
+        </button>
+    </div>
+    
+    <!-- Panel de control de medidas (visible solo cuando hay una figura seleccionada) -->
+    <div id="controlsPanel" class="mb-6 p-4 bg-white border border-gray-300 rounded-lg shadow-lg w-full max-w-lg hidden">
+        <h3 class="font-bold text-gray-700 mb-2 flex items-center justify-between">
+            Modificar Figura Seleccionada
+            <span id="shapeName" class="text-sm font-semibold text-indigo-600"></span>
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Input de Rotación (siempre visible) -->
+            <div class="flex flex-col">
+                <label for="input-rotation" class="text-sm font-medium text-gray-600">Rotación (°)</label>
+                <input type="number" id="input-rotation" value="0" step="1"
+                       class="mt-1 p-2 border border-gray-300 rounded-md focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+            </div>
+            <!-- Los campos de medida se inyectan aquí dinámicamente -->
+            <div id="measureInputs" class="col-span-2 grid grid-cols-2 gap-4"></div>
+        </div>
+    </div>
+    
+    <!-- Área de dibujo -->
+    <canvas id="miCanvas" width="500" height="400" class="rounded-xl bg-white"></canvas>
+
+    <!-- Botón y Contenedor para la integración de Gemini -->
+    <div class="mt-6 flex flex-wrap justify-center gap-4 w-full max-w-lg">
+        <button id="generateDescBtn" onclick="generateSceneDescription()" class="bg-purple-600 hover:bg-purple-800 text-white font-bold py-3 px-6 rounded-lg transition duration-300 transform hover:scale-105 shadow-md flex items-center justify-center w-full">
+            ✨ Generar Descripción de Escena (IA)
+        </button>
+    </div>
+
+    <!-- Contenedor para el resultado del LLM -->
+    <div id="llmOutput" class="mt-4 p-4 bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-lg shadow-lg w-full max-w-lg hidden">
+        <h3 class="font-bold mb-2 text-gray-700">Resultado de Gemini:</h3>
+        <p id="llmText"></p>
+        <div id="llmLoading" class="text-sm font-semibold mt-2 text-center text-purple-600 hidden">Cargando la inspiración...</div>
+    </div>
+
+
+    <script>
+        const canvas = document.getElementById("miCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // ESCALA: 1 cm = 20 píxeles
+        const PIXELS_PER_CM = 20;
+        const RAD_TO_DEG = 180 / Math.PI;
+        const DEG_TO_RAD = Math.PI / 180;
+
+        let shapes = []; 
+
+        // Variables de estado para el arrastre y redimensionamiento
+        let isDragging = false;
+        let isResizing = false;
+        let isRotating = false;
+        let selectedShape = null; 
+        let dragOffsetX = 0;      
+        let dragOffsetY = 0;      
+
+        // Elementos de UI
+        const controlsPanel = document.getElementById('controlsPanel');
+        const measureInputs = document.getElementById('measureInputs');
+        const shapeNameSpan = document.getElementById('shapeName');
+        const inputRotation = document.getElementById('input-rotation');
+        const llmOutputDiv = document.getElementById('llmOutput');
+        const llmTextP = document.getElementById('llmText');
+        const llmLoadingDiv = document.getElementById('llmLoading');
+        const generateDescBtn = document.getElementById('generateDescBtn');
+
+        // Variables para la API de Gemini
+        const apiKey = ""; 
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+        
+        // Inicializar listeners de rotación de UI
+        inputRotation.addEventListener('change', handleRotationInput);
+
+        // -----------------------------------------------------
+        // Utilidades de Conversión
+        // -----------------------------------------------------
+
+        function pxToCm(px) {
+            return (px / PIXELS_PER_CM).toFixed(1);
+        }
+
+        function cmToPx(cm) {
+            return parseFloat(cm) * PIXELS_PER_CM;
+        }
+
+        function getRandomColor() {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+        }
+
+        // -----------------------------------------------------
+        // Lógica de UI para Controles de Medida y Rotación
+        // -----------------------------------------------------
+
+        function handleRotationInput(e) {
+            const newDegrees = parseFloat(e.target.value);
+            if (selectedShape && !isNaN(newDegrees)) {
+                selectedShape.rotation = newDegrees * DEG_TO_RAD;
+                drawShapes();
+            }
+        }
+
+        /**
+         * Actualiza el panel de control con los inputs correctos para la figura seleccionada.
+         */
+        function updateControlsPanel() {
+            measureInputs.innerHTML = ''; 
+            controlsPanel.classList.add('hidden');
+
+            if (!selectedShape) {
+                inputRotation.value = 0;
+                return;
+            }
+
+            shapeNameSpan.textContent = selectedShape.type.toUpperCase();
+            controlsPanel.classList.remove('hidden');
+
+            // Actualizar input de rotación
+            inputRotation.value = (selectedShape.rotation * RAD_TO_DEG).toFixed(0);
+
+            const createInput = (label, propName, value) => {
+                const cmValue = pxToCm(value);
+                const inputId = `input-${propName}`;
+                
+                const div = document.createElement('div');
+                div.className = 'flex flex-col';
+                div.innerHTML = `
+                    <label for="${inputId}" class="text-sm font-medium text-gray-600">${label} (cm)</label>
+                    <input type="number" id="${inputId}" value="${cmValue}" step="0.1" min="0.5"
+                           class="mt-1 p-2 border border-gray-300 rounded-md focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                `;
+                
+                const input = div.querySelector('input');
+                input.addEventListener('change', (e) => {
+                    const newCm = parseFloat(e.target.value);
+                    if (newCm > 0) {
+                        selectedShape[propName] = cmToPx(newCm);
+                        drawShapes();
+                    } else {
+                        e.target.value = pxToCm(selectedShape[propName]); 
+                    }
+                });
+                
+                measureInputs.appendChild(div);
+            };
+
+            if (selectedShape.type === 'circle') {
+                createInput('Radio', 'radius', selectedShape.radius);
+            } else if (selectedShape.type === 'square') {
+                createInput('Lado', 'size', selectedShape.size);
+            } else if (selectedShape.type === 'triangle') {
+                createInput('Base', 'base', selectedShape.base);
+                createInput('Altura', 'height', selectedShape.height);
+            }
+        }
+
+
+        // -----------------------------------------------------
+        // Lógica de Dibujo y Redibujado
+        // -----------------------------------------------------
+
+        /**
+         * Dibuja una figura individual, aplicando la rotación.
+         */
+        function drawShape(shape) {
+            // Guardar el estado actual del canvas (sin transformaciones)
+            ctx.save(); 
+
+            // Aplicar la rotación y traslación
+            ctx.translate(shape.x, shape.y);
+            ctx.rotate(shape.rotation);
+
+            ctx.beginPath();
+            ctx.fillStyle = shape.color;
+            ctx.strokeStyle = '#333333';
+            ctx.lineWidth = 2;
+
+            // Dibujar la figura centrada en (0, 0)
+            if (shape.type === 'circle') {
+                ctx.arc(0, 0, shape.radius, 0, 2 * Math.PI);
+            } else if (shape.type === 'square') {
+                ctx.rect(-shape.size / 2, -shape.size / 2, shape.size, shape.size);
+            } else if (shape.type === 'triangle') {
+                const h = shape.height;
+                const b = shape.base;
+                const topY = -(h * 2 / 3); 
+                
+                ctx.moveTo(0, topY);
+                ctx.lineTo(b / 2, topY + h);
+                ctx.lineTo(-b / 2, topY + h);
+                ctx.closePath();
+            }
+
+            ctx.fill();
+            ctx.stroke();
+
+            // Restaurar el canvas al estado guardado (antes de la rotación)
+            ctx.restore(); 
+
+            // Dibujar controles SI está seleccionado (debemos dibujarlos en el contexto no-rotado)
+            if (shape === selectedShape) {
+                // Calcular las coordenadas de los controles
+                const centerToControl = shape.type === 'circle' ? shape.radius : shape.type === 'square' ? shape.size / 1.5 : Math.max(shape.base, shape.height) / 2;
+                
+                // Control de Redimensionamiento (Punto Azul - 45 grados de rotación)
+                const resizeAngle = shape.rotation + 45 * DEG_TO_RAD; 
+                const resizeX = shape.x + Math.cos(resizeAngle) * centerToControl;
+                const resizeY = shape.y + Math.sin(resizeAngle) * centerToControl;
+
+                ctx.beginPath();
+                ctx.arc(resizeX, resizeY, 6, 0, 2 * Math.PI);
+                ctx.fillStyle = isResizing ? '#CC0000' : '#0099CC'; // Rojo si redimensionando
+                ctx.fill();
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                // Control de Rotación (Punto Verde - 135 grados de rotación)
+                const rotateAngle = shape.rotation + 135 * DEG_TO_RAD; 
+                const rotateX = shape.x + Math.cos(rotateAngle) * centerToControl;
+                const rotateY = shape.y + Math.sin(rotateAngle) * centerToControl;
+                
+                ctx.beginPath();
+                ctx.arc(rotateX, rotateY, 6, 0, 2 * Math.PI);
+                ctx.fillStyle = isRotating ? '#00CC00' : '#00CC00'; // Verde
+                ctx.fill();
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+        }
+
+        /**
+         * Limpia el canvas y redibuja todas las figuras del array 'shapes'.
+         */
+        function drawShapes() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            shapes.forEach(drawShape);
+            updateControlsPanel(); 
+        }
+
+        /**
+         * Limpia el canvas y el array de figuras.
+         */
+        function clearCanvas() {
+            shapes = [];
+            selectedShape = null;
+            drawShapes();
+            llmOutputDiv.classList.add('hidden');
+        }
+
+        // -----------------------------------------------------
+        // Lógica de Creación de Figuras
+        // -----------------------------------------------------
+
+        function addShape(type) {
+            const color = getRandomColor();
+            const x = Math.floor(Math.random() * (canvas.width - 100)) + 50;
+            const y = Math.floor(Math.random() * (canvas.height - 100)) + 50;
+
+            let newShape;
+
+            if (type === 'circle') {
+                newShape = { type: 'circle', x, y, radius: 40, color, rotation: 0 };
+            } else if (type === 'square') {
+                newShape = { type: 'square', x, y, size: 80, color, rotation: 0 };
+            } else if (type === 'triangle') {
+                newShape = { type: 'triangle', x, y, base: 80, height: 80, color, rotation: 0 };
+            }
+
+            shapes.unshift(newShape); 
+            selectedShape = newShape;
+            drawShapes();
+        }
+
+        // -----------------------------------------------------
+        // Lógica de Interacción (Arrastre, Redimensionamiento, Rotación)
+        // -----------------------------------------------------
+
+        function isPointInControl(mx, my, shape, controlType) {
+            const centerToControl = shape.type === 'circle' ? shape.radius : shape.type === 'square' ? shape.size / 1.5 : Math.max(shape.base, shape.height) / 2;
+            
+            let angle;
+            if (controlType === 'resize') {
+                angle = shape.rotation + 45 * DEG_TO_RAD;
+            } else if (controlType === 'rotate') {
+                angle = shape.rotation + 135 * DEG_TO_RAD;
+            } else {
+                return false;
+            }
+
+            const ctrlX = shape.x + Math.cos(angle) * centerToControl;
+            const ctrlY = shape.y + Math.sin(angle) * centerToControl;
+            
+            const dist = Math.sqrt(Math.pow(mx - ctrlX, 2) + Math.pow(my - ctrlY, 2));
+            return dist < 10;
+        }
+
+        /**
+         * Calcula el ángulo entre el centro de la figura y el punto del ratón/toque.
+         */
+        function getAngle(shape, pos) {
+            const dx = pos.x - shape.x;
+            const dy = pos.y - shape.y;
+            return Math.atan2(dy, dx);
+        }
+
+        // Manejador de inicio de interacción (MouseDown o TouchStart)
+        function handleMouseDown(e) {
+            e.preventDefault();
+            const pos = getMousePos(e);
+            
+            selectedShape = null;
+            isDragging = false;
+            isResizing = false;
+            isRotating = false;
+
+            for (let i = 0; i < shapes.length; i++) {
+                const shape = shapes[i];
+
+                if (isPointInControl(pos.x, pos.y, shape, 'rotate')) {
+                    selectedShape = shape;
+                    isRotating = true;
+                    shapes.splice(i, 1);
+                    shapes.unshift(selectedShape);
+                    break;
+                } else if (isPointInControl(pos.x, pos.y, shape, 'resize')) {
+                    selectedShape = shape;
+                    isResizing = true;
+                    shapes.splice(i, 1);
+                    shapes.unshift(selectedShape);
+                    break;
+                } else if (isPointInShape(pos.x, pos.y, shape)) {
+                    selectedShape = shape;
+                    isDragging = true;
+                    dragOffsetX = pos.x - shape.x;
+                    dragOffsetY = pos.y - shape.y;
+                    shapes.splice(i, 1);
+                    shapes.unshift(selectedShape);
+                    break;
+                }
+            }
+
+            drawShapes();
+            
+            if (isDragging) {
+                canvas.classList.add('dragging');
+                canvas.style.cursor = 'grabbing';
+            } else if (isResizing) {
+                canvas.classList.add('resizing');
+                canvas.style.cursor = 'nwse-resize';
+            } else if (isRotating) {
+                canvas.classList.add('rotating');
+                canvas.style.cursor = 'move';
+            } else {
+                canvas.classList.remove('dragging', 'resizing', 'rotating');
+                canvas.style.cursor = 'grab'; 
+            }
+        }
+
+        // Manejador de movimiento (MouseMove o TouchMove)
+        function handleMouseMove(e) {
+            e.preventDefault();
+            const pos = getMousePos(e);
+            
+            if (!selectedShape) return;
+            
+            if (isRotating) {
+                const angle = getAngle(selectedShape, pos);
+                selectedShape.rotation = angle;
+            } else if (isResizing) {
+                if (selectedShape.type === 'circle') {
+                    const dx = pos.x - selectedShape.x;
+                    const dy = pos.y - selectedShape.y;
+                    let newRadius = Math.max(10, Math.sqrt(dx * dx + dy * dy)); 
+                    selectedShape.radius = newRadius;
+                } else if (selectedShape.type === 'square') {
+                    // Calculamos la distancia rotada desde el centro
+                    const relX = pos.x - selectedShape.x;
+                    const relY = pos.y - selectedShape.y;
+                    const cosA = Math.cos(-selectedShape.rotation);
+                    const sinA = Math.sin(-selectedShape.rotation);
+                    const rotatedX = relX * cosA - relY * sinA;
+                    const rotatedY = relX * sinA + relY * cosA;
+                    
+                    let newSize = Math.max(20, 2 * Math.max(Math.abs(rotatedX), Math.abs(rotatedY))); 
+                    selectedShape.size = newSize;
+                } else if (selectedShape.type === 'triangle') {
+                    // Simplificamos al redimensionar base y altura en función de la distancia total desde el centro
+                    const dx = pos.x - selectedShape.x;
+                    const dy = pos.y - selectedShape.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    // Ajuste simple, podrías requerir lógica más compleja para mantener proporciones rotadas
+                    selectedShape.base = Math.max(20, dist * 1.5);
+                    selectedShape.height = Math.max(20, dist * 1.5);
+                }
+            } else if (isDragging) {
+                selectedShape.x = pos.x - dragOffsetX;
+                selectedShape.y = pos.y - dragOffsetY;
+                
+                selectedShape.x = Math.max(0, Math.min(canvas.width, selec
