@@ -12,7 +12,7 @@
             font-family: 'Inter', sans-serif;
             background-color: #e2e8f0; /* Slate-200 */
             min-height: 100vh; /* Establece una altura mínima para el flex container del body */
-            overflow-y: auto; /* Asegura el scroll vertical si el contenido excede el viewport */
+            overflow-y: scroll; /* Cambio a 'scroll' para que la barra vertical esté siempre visible */
         }
         #geometricCanvas {
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
@@ -695,8 +695,6 @@
             
             // Si el click no es en el canvas, ignorar
             if (e.target !== canvas) {
-                // Aquí podrías permitir el scroll nativo si fuera necesario, 
-                // pero ya está manejado por la estructura del DOM.
                 return;
             }
 
@@ -840,3 +838,4 @@
     </script>
 </body>
 </html>
+
