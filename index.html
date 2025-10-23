@@ -124,6 +124,10 @@
         const maxScale = 3.0;
         const minScale = 0.2;
         
+        // ** NUEVOS LÍMITES DE DESPLAZAMIENTO **
+        // Definimos un margen de 300px alrededor del centro para el desplazamiento (panning)
+        const PAN_LIMIT = 300; 
+
         // -----------------------------------------------------
         // UTILIDADES Y CÁLCULOS GEOMÉTRICOS
         // -----------------------------------------------------
@@ -464,6 +468,10 @@
                 offsetY = mouseY - scaleRatio * (mouseY - offsetY);
 
                 scale = newScale;
+                
+                // Aplicar límites de desplazamiento después del zoom para mantener el lienzo centrado
+                applyPanLimits(); 
+                
                 drawShapes();
             }
         }
@@ -476,6 +484,27 @@
             zoom(factor, screenPos.x, screenPos.y);
         }
 
+        /**
+         * Aplica límites al desplazamiento (offset) para que el lienzo no se pierda.
+         */
+        function applyPanLimits() {
+            // El centro del lienzo es (canvas.width / 2, canvas.height / 2)
+            // Cuando offsetX/Y es 0, el punto (0,0) del mundo está en el centro de la pantalla.
+            
+            // maxLimitX: Máximo valor positivo que offsetX puede tener (desplazamiento a la derecha)
+            const maxLimitX = canvas.width / 2 + PAN_LIMIT * scale; 
+            // minLimitX: Mínimo valor negativo que offsetX puede tener (desplazamiento a la izquierda)
+            const minLimitX = canvas.width / 2 - PAN_LIMIT * scale; 
+
+            // maxLimitY: Máximo valor positivo que offsetY puede tener (desplazamiento hacia abajo)
+            const maxLimitY = canvas.height / 2 + PAN_LIMIT * scale;
+            // minLimitY: Mínimo valor negativo que offsetY puede tener (desplazamiento hacia arriba)
+            const minLimitY = canvas.height / 2 - PAN_LIMIT * scale;
+            
+            offsetX = Math.min(maxLimitX, Math.max(minLimitX, offsetX));
+            offsetY = Math.min(maxLimitY, Math.max(minLimitY, offsetY));
+        }
+
         // -----------------------------------------------------
         // INICIALIZACIÓN Y LÓGICA DE FORMAS
         // -----------------------------------------------------
@@ -484,9 +513,15 @@
             const containerWidth = canvas.parentElement.clientWidth;
             canvas.width = Math.min(containerWidth, 900);
             canvas.height = 500; 
+            
+            // Resetear el offset para que el centro del mundo (0,0) esté en el centro de la pantalla
+            offsetX = canvas.width / 2;
+            offsetY = canvas.height / 2;
+            
             drawShapes();
         }
         window.addEventListener('resize', resizeCanvas);
+        // Llamar a resizeCanvas en lugar de drawShapes para establecer el offset inicial
         window.onload = resizeCanvas; 
 
         function updateControlButtonsVisibility() {
@@ -509,9 +544,9 @@
 
         function addShape(type) {
             const color = getRandomColor();
-            // Center in the current view
-            const x = (canvas.width / 2 - offsetX) / scale; 
-            const y = (canvas.height / 2 - offsetY) / scale;
+            // Center in the current view (0,0 in World Coordinates)
+            const x = 0; 
+            const y = 0;
             let newShape;
 
             if (type === 'circle') {
@@ -746,7 +781,6 @@
 
         function handleMouseMove(e) {
             
-            // ** CORRECCIÓN CLAVE PARA EL SCROLL MÓVIL **
             // Solo prevenimos la acción por defecto (scroll de página) si actionState 
             // no es nulo, es decir, si estamos arrastrando activamente una forma o el lienzo.
             if (actionState !== null) {
@@ -763,6 +797,9 @@
 
                 offsetX += dx;
                 offsetY += dy;
+
+                // ** APLICAR LÍMITES DE DESPLAZAMIENTO **
+                applyPanLimits();
 
                 dragOffset.x = screenPos.x;
                 dragOffset.y = screenPos.y;
