@@ -11,8 +11,8 @@
         body {
             font-family: 'Inter', sans-serif;
             background-color: #e2e8f0; /* Slate-200 */
-            min-height: 100vh; /* Establece una altura mínima para el flex container del body */
-            overflow-y: scroll; /* Cambio a 'scroll' para que la barra vertical esté siempre visible */
+            min-height: 100vh;
+            overflow-y: scroll;
         }
         #geometricCanvas {
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
@@ -21,7 +21,7 @@
             width: 100%;
             max-width: 900px;
             height: 500px; 
-            touch-action: none; /* Crucial para evitar que el arrastre en el canvas haga scroll de la página */
+            touch-action: none; 
             cursor: default;
         }
         /* Cursors for internal canvas interaction */
@@ -31,6 +31,27 @@
         .resizer-ew { cursor: ew-resize !important; } 
         .move-vertex { cursor: move !important; }
         .panning { cursor: all-scroll !important; } 
+
+        /* Estilo para el selector de color (se asegura de que sea visible) */
+        #colorPicker {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            width: 32px;
+            height: 32px;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        #colorPicker::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+        #colorPicker::-webkit-color-swatch {
+            border: none;
+        }
 
     </style>
 </head>
@@ -67,6 +88,13 @@
         
         <!-- Controles de Edición de Figura Seleccionada -->
         <div class="flex items-start gap-4 flex-wrap" id="shapeControlsContainer">
+            
+            <!-- Selector de Color -->
+            <div id="colorControlContainer" class="hidden min-w-[150px] mt-2 bg-white p-3 rounded-xl shadow-lg flex items-center space-x-2 border border-gray-200">
+                <label for="colorPicker" class="text-sm font-semibold text-gray-700">Relleno:</label>
+                <input type="color" id="colorPicker" oninput="changeShapeColor(this.value)" class="h-8 w-8">
+            </div>
+
             <!-- Botón de Regularización -->
             <div id="regularizeButtonContainer" class="hidden min-w-[150px] mt-2">
                 <button id="regularizeButton" onclick="regularizeShape()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl transition duration-300 shadow-lg text-sm sm:text-base">
@@ -74,20 +102,18 @@
                 </button>
             </div>
             
-            <!-- Botón de Eliminación (NUEVO) -->
+            <!-- Botón de Eliminación -->
             <div id="deleteButtonContainer" class="hidden min-w-[150px] mt-2">
                 <button id="deleteShapeButton" onclick="deleteSelectedShape()" class="bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-6 rounded-xl transition duration-300 shadow-lg text-sm sm:text-base">
-                    Eliminar Figura Seleccionada
+                    Eliminar Figura
                 </button>
             </div>
         </div>
 
         <!-- Controles de Zoom -->
         <div class="flex items-center space-x-6 ml-auto mt-2 p-2 bg-white rounded-xl shadow-lg self-start">
-            <!-- Botón de disminuir (-) -->
             <button onclick="zoom(1/1.1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold w-10 h-10 rounded-full transition duration-150 text-xl">-</button>
             <span id="zoomLevel" class="text-sm font-semibold text-gray-700 w-12 text-center">100%</span>
-            <!-- Botón de aumentar (+) -->
             <button onclick="zoom(1.1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold w-10 h-10 rounded-full transition duration-150 text-xl">+</button>
         </div>
     </div>
@@ -102,6 +128,8 @@
         const ctx = canvas.getContext("2d");
         const regularizeButtonContainer = document.getElementById('regularizeButtonContainer');
         const deleteButtonContainer = document.getElementById('deleteButtonContainer'); 
+        const colorControlContainer = document.getElementById('colorControlContainer'); 
+        const colorPicker = document.getElementById('colorPicker');                 
         const zoomLevelSpan = document.getElementById('zoomLevel');
         
         // --- Configuración y Estado Global ---
@@ -114,7 +142,8 @@
         let dragOffset = { x: 0, y: 0 }; 
         let resizeControlIndex = -1; 
         
-        const controlSize = 14; 
+        // ** TAMAÑO DEL CONTROL EN PÍXELES DE PANTALLA **
+        const controlScreenRadius = 7; 
         const minRadius = 5;
 
         // --- Variables de Zoom y Panorámica ---
@@ -124,8 +153,7 @@
         const maxScale = 3.0;
         const minScale = 0.2;
         
-        // ** NUEVOS LÍMITES DE DESPLAZAMIENTO **
-        // Definimos un margen de 300px alrededor del centro para el desplazamiento (panning)
+        // ** LÍMITES DE DESPLAZAMIENTO **
         const PAN_LIMIT = 300; 
 
         // -----------------------------------------------------
@@ -201,12 +229,15 @@
             const bb = getBoundingBox(vertices);
             const maxDimension = Math.max(bb.width, bb.height);
             const vertexCount = vertices.length;
+            
+            // ** TAMAÑO DINÁMICO DEL CONTROL EN COORDENADAS DEL MUNDO **
+            const controlWorldSize = controlScreenRadius / scale; 
 
             for (let i = 0; i < vertexCount; i++) {
                 const globalPos = localToGlobal(vertices[i].x, vertices[i].y, shape);
                 controls.resize.push({
                     x: globalPos.x, y: globalPos.y, index: i, type: 'corner',
-                    cursorClass: 'move-vertex', size: controlSize / scale 
+                    cursorClass: 'move-vertex', size: controlWorldSize 
                 });
             }
 
@@ -219,7 +250,7 @@
                 const globalPos = localToGlobal(midX, midY, shape);
                 controls.resize.push({
                     x: globalPos.x, y: globalPos.y, index: i + vertexCount, type: 'midpoint',
-                    cursorClass: 'move-vertex', size: controlSize / scale 
+                    cursorClass: 'move-vertex', size: controlWorldSize 
                 });
             }
             return { controls, maxDimension };
@@ -231,6 +262,9 @@
             const halfH = shape.ry;
             const maxDimension = Math.max(shape.rx, shape.ry) * 2;
             const margin = 10 / scale; 
+            
+            // ** TAMAÑO DINÁMICO DEL CONTROL EN COORDENADAS DEL MUNDO **
+            const controlWorldSize = controlScreenRadius / scale; 
 
             const ellipseControlsData = [
                 { xLocal: 1, yLocal: 0, cursor: 'resizer-ew', axis: 'x', type: 'midpoint' }, 
@@ -249,7 +283,7 @@
                 const globalPos = localToGlobal(localX, localY, shape);
                 controls.resize.push({
                     x: globalPos.x, y: globalPos.y, index: index, type: data.type,
-                    cursorClass: data.cursor, size: controlSize / scale, axis: data.axis
+                    cursorClass: data.cursor, size: controlWorldSize, axis: data.axis
                 });
             });
 
@@ -259,6 +293,9 @@
         function getShapeControls(shape) {
             let controls = { resize: [], rotate: null };
             let maxDimension = 0;
+            
+            // ** TAMAÑO DINÁMICO DEL CONTROL EN COORDENADAS DEL MUNDO **
+            const controlWorldSize = controlScreenRadius / scale; 
 
             const isPolygon = shape.type === 'rectangle' || shape.type === 'triangle';
 
@@ -275,7 +312,7 @@
                 controls.rotate = {
                     x: shape.x + Math.cos(rotateAngle) * rotationControlDistance,
                     y: shape.y + Math.sin(rotateAngle) * rotationControlDistance,
-                    size: controlSize / scale
+                    size: controlWorldSize
                 };
             }
 
@@ -286,6 +323,7 @@
         // --- DIBUJO ---
 
         function getRandomColor() {
+            // Usamos colores predefinidos que Tailwind usa para asegurar contraste
             const colors = ['#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#8b5cf6'];
             return colors[Math.floor(Math.random() * colors.length)];
         }
@@ -294,12 +332,14 @@
             ctx.save();
             ctx.beginPath();
             
+            // El ancho del trazo también debe ser dinámico
             const strokeWidth = 2 / scale; 
 
             ctx.fillStyle = ctrl.type === 'corner' ? '#2563eb' : '#fbbf24'; 
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = strokeWidth;
 
+            // El radio (ctrl.size) ya se calculó como controlScreenRadius / scale
             ctx.arc(ctrl.x, ctrl.y, ctrl.size, 0, 2 * Math.PI);
            
             ctx.fill();
@@ -316,6 +356,7 @@
             const vertexCount = vertices.length;
 
             ctx.save();
+            // El tamaño de fuente también es dinámico para mantener la legibilidad
             ctx.font = `${14 / scale}px Inter`;
             ctx.textAlign = 'center';
             ctx.fillStyle = '#1e3a8a'; 
@@ -364,7 +405,8 @@
             ctx.rotate(shape.rotation);
 
             ctx.beginPath();
-            ctx.fillStyle = shape.color;
+            // El ancho de línea de la figura también debe ser dinámico
+            ctx.fillStyle = shape.color; 
             ctx.strokeStyle = '#333333';
             ctx.lineWidth = 2 / scale; 
 
@@ -395,6 +437,7 @@
                 const rotateCtrl = controls.rotate;
                 if (rotateCtrl) {
                     ctx.beginPath();
+                    // El radio también se ha calculado dinámicamente
                     ctx.arc(rotateCtrl.x, rotateCtrl.y, rotateCtrl.size, 0, 2 * Math.PI);
                     ctx.fillStyle = '#16a34a'; 
                     ctx.strokeStyle = '#ffffff';
@@ -415,6 +458,7 @@
 
                     ctx.save();
                     ctx.fillStyle = '#1e3a8a'; 
+                    // El tamaño de fuente también es dinámico
                     ctx.font = `${14 / scale}px Inter`; 
                     ctx.textAlign = 'center';
                     
@@ -469,7 +513,6 @@
 
                 scale = newScale;
                 
-                // Aplicar límites de desplazamiento después del zoom para mantener el lienzo centrado
                 applyPanLimits(); 
                 
                 drawShapes();
@@ -488,17 +531,10 @@
          * Aplica límites al desplazamiento (offset) para que el lienzo no se pierda.
          */
         function applyPanLimits() {
-            // El centro del lienzo es (canvas.width / 2, canvas.height / 2)
-            // Cuando offsetX/Y es 0, el punto (0,0) del mundo está en el centro de la pantalla.
-            
-            // maxLimitX: Máximo valor positivo que offsetX puede tener (desplazamiento a la derecha)
             const maxLimitX = canvas.width / 2 + PAN_LIMIT * scale; 
-            // minLimitX: Mínimo valor negativo que offsetX puede tener (desplazamiento a la izquierda)
             const minLimitX = canvas.width / 2 - PAN_LIMIT * scale; 
 
-            // maxLimitY: Máximo valor positivo que offsetY puede tener (desplazamiento hacia abajo)
             const maxLimitY = canvas.height / 2 + PAN_LIMIT * scale;
-            // minLimitY: Mínimo valor negativo que offsetY puede tener (desplazamiento hacia arriba)
             const minLimitY = canvas.height / 2 - PAN_LIMIT * scale;
             
             offsetX = Math.min(maxLimitX, Math.max(minLimitX, offsetX));
@@ -520,21 +556,44 @@
             
             drawShapes();
         }
+
         window.addEventListener('resize', resizeCanvas);
-        // Llamar a resizeCanvas en lugar de drawShapes para establecer el offset inicial
-        window.onload = resizeCanvas; 
+        window.onload = function() {
+            resizeCanvas();
+            // Inicialización de listener para el color picker
+            colorPicker.addEventListener('input', (e) => changeShapeColor(e.target.value));
+        };
+        
+        /**
+         * Cambia el color de la figura seleccionada.
+         */
+        function changeShapeColor(newColor) {
+            if (selectedShape) {
+                selectedShape.color = newColor;
+                drawShapes();
+            }
+        }
 
         function updateControlButtonsVisibility() {
             const isShapeSelected = selectedShape !== null;
             const isRegularizable = isShapeSelected && (selectedShape.type === 'circle' || selectedShape.type === 'rectangle' || selectedShape.type === 'triangle');
             
+            // 1. Visibilidad del Selector de Color
+            if (isShapeSelected) {
+                colorControlContainer.classList.remove('hidden');
+                colorPicker.value = selectedShape.color || '#3b82f6'; // Sincroniza el picker
+            } else {
+                colorControlContainer.classList.add('hidden');
+            }
+
+            // 2. Visibilidad del Botón Regularizar
             if (isRegularizable) {
                 regularizeButtonContainer.classList.remove('hidden');
             } else {
                 regularizeButtonContainer.classList.add('hidden');
             }
             
-            // Show/Hide Delete Button
+            // 3. Visibilidad del Botón Eliminar
             if (isShapeSelected) {
                 deleteButtonContainer.classList.remove('hidden');
             } else {
@@ -544,7 +603,6 @@
 
         function addShape(type) {
             const color = getRandomColor();
-            // Center in the current view (0,0 in World Coordinates)
             const x = 0; 
             const y = 0;
             let newShape;
@@ -585,7 +643,6 @@
             drawShapes();
         }
         
-        // Función para eliminar la figura seleccionada
         function deleteSelectedShape() {
             if (!selectedShape) return;
 
@@ -642,17 +699,14 @@
             const { x: localX, y: localY } = globalToLocal(mx, my, shape);
 
             if (shape.type === 'circle') {
+                // Ecuación de elipse
                 return (Math.pow(localX / shape.rx, 2) + Math.pow(localY / shape.ry, 2) <= 1);
             } 
             
             if (shape.type === 'rectangle' || shape.type === 'triangle') {
+                // Uso de Ray Casting o simplificación por Bounding Box (BB) para polígonos irregulares
                 const bb = getBoundingBox(shape.vertices);
-                const minX = bb.minX;
-                const maxX = bb.maxX;
-                const minY = bb.minY;
-                const maxY = bb.maxY;
-                
-                return (localX >= minX && localX <= maxX && localY >= minY && localY <= maxY);
+                return (localX >= bb.minX && localX <= bb.maxX && localY >= bb.minY && localY <= bb.maxY);
             }
             
             return false;
@@ -662,8 +716,10 @@
             if (!shape) return { action: null, index: -1, cursor: 'default' };
 
             const controls = getShapeControls(shape);
+            // La tolerancia de golpe debe ser constante en píxeles de pantalla
             const tolerance = 15 / scale; 
             
+            // Check Rotation Control
             if (controls.rotate) {
                 const distRotate = Math.sqrt(Math.pow(mx - controls.rotate.x, 2) + Math.pow(my - controls.rotate.y, 2));
                 if (distRotate < controls.rotate.size + tolerance) {
@@ -671,6 +727,7 @@
                 }
             }
 
+            // Check Resize Controls
             for (const ctrl of controls.resize) {
                 const distResize = Math.sqrt(Math.pow(mx - ctrl.x, 2) + Math.pow(my - ctrl.y, 2));
                 if (distResize < ctrl.size + tolerance) {
@@ -686,11 +743,13 @@
             const vertexCount = vertices.length;
             
             if (resizeControlIndex < vertexCount) {
+                // Resize corner (Move vertex)
                 const vertexIndex = resizeControlIndex;
                 vertices[vertexIndex].x = localMouseX;
                 vertices[vertexIndex].y = localMouseY;
                 
             } else {
+                // Resize midpoint (Move edge - implemented as moving both vertices)
                 const edgeIndex = resizeControlIndex - vertexCount;
                 const v1Index = edgeIndex;
                 const v2Index = (edgeIndex + 1) % vertexCount;
@@ -713,6 +772,7 @@
         function handleEllipseResize(shape, localMouseX, localMouseY, hit) {
             const axis = hit.axis;
             
+            // El redimensionamiento de la elipse se hace relativo a su centro (0,0 local)
             if (axis === 'x') {
                 shape.rx = Math.max(minRadius, Math.abs(localMouseX));
             } else if (axis === 'y') {
@@ -720,21 +780,19 @@
             }
         }
 
-        let lastHit = null; 
+        let lastHit = null; // Almacena el objeto hit para conservar metadatos de redimensionamiento
 
         function handleMouseDown(e) {
-            // Este preventDefault es correcto porque solo escucha en el canvas, 
-            // asegurando que un toque inicial en el canvas se destine al dibujo/panorámica y no al scroll de la página.
             e.preventDefault(); 
             
             const worldPos = getWorldPos(e); 
             const screenPos = getScreenPos(e); 
             
-            // Si el click no es en el canvas, ignorar (aunque el listener solo está en el canvas)
             if (e.target !== canvas) {
                 return;
             }
 
+            // Reiniciar estados
             selectedShape = null;
             actionState = null;
             resizeControlIndex = -1;
@@ -746,22 +804,26 @@
                 const hit = getControlHit(worldPos.x, worldPos.y, shape);
 
                 if (hit.action) {
+                    // Control de Redimensionamiento o Rotación
                     selectedShape = shape;
                     actionState = hit.action;
                     resizeControlIndex = hit.index; 
                     canvas.className = hit.cursor;
                     lastHit = hit; 
                     
+                    // Mover la forma seleccionada al frente
                     shapes.splice(i, 1);
                     shapes.unshift(selectedShape);
                     break;
                 } else if (isPointInShape(worldPos.x, worldPos.y, shape)) {
+                    // Arrastre de Forma
                     selectedShape = shape;
                     actionState = 'drag';
                     dragOffset.x = worldPos.x - shape.x; 
                     dragOffset.y = worldPos.y - shape.y;
                     canvas.className = 'dragging';
 
+                    // Mover la forma seleccionada al frente
                     shapes.splice(i, 1);
                     shapes.unshift(selectedShape);
                     break;
@@ -781,8 +843,6 @@
 
         function handleMouseMove(e) {
             
-            // Solo prevenimos la acción por defecto (scroll de página) si actionState 
-            // no es nulo, es decir, si estamos arrastrando activamente una forma o el lienzo.
             if (actionState !== null) {
                 e.preventDefault(); 
             }
@@ -798,7 +858,6 @@
                 offsetX += dx;
                 offsetY += dy;
 
-                // ** APLICAR LÍMITES DE DESPLAZAMIENTO **
                 applyPanLimits();
 
                 dragOffset.x = screenPos.x;
@@ -809,7 +868,6 @@
             }
             
             // Lógica de Hover del Cursor (Solo para mouse)
-            // e.touches es undefined o false si es evento de mouse
             if (actionState === null && !e.touches) {
                 let hoverAction = 'default';
                 for(const shape of shapes) {
@@ -826,7 +884,6 @@
                 return;
             }
 
-            // Si actionState es nulo (y no es mouse), salimos para permitir el scroll de la página.
             if (actionState === null) return;
 
             // Lógica de Interacción con la Forma
@@ -835,6 +892,7 @@
             if (actionState === 'rotate') {
                 const dx = worldPos.x - selectedShape.x;
                 const dy = worldPos.y - selectedShape.y;
+                // Ajustamos el ángulo de rotación usando el desplazamiento (225 grados) del control de rotación
                 selectedShape.rotation = Math.atan2(dy, dx) - (225 * DEG_TO_RAD); 
 
             } else if (actionState === 'resize') {
@@ -875,7 +933,6 @@
         
         // Eventos Táctiles (Touch)
         canvas.addEventListener('touchstart', handleMouseDown); 
-        // El listener en el documento es necesario para que el arrastre continúe fuera del canvas.
         document.addEventListener('touchmove', handleMouseMove, { passive: false });
         document.addEventListener('touchend', handleMouseUp);
         document.addEventListener('touchcancel', handleMouseUp);
