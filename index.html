@@ -10,8 +10,10 @@
         /* Estilos base y cursores personalizados */
         body {
             font-family: 'Inter', sans-serif;
-            min-height: 100vh;
+            /* Se eliminó min-height: 100vh para permitir el scroll nativo en móviles */
             background-color: #e2e8f0; /* Slate-200 */
+            /* Aseguramos que la página ocupe el ancho completo */
+            width: 100%; 
         }
         #geometricCanvas {
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
@@ -20,28 +22,28 @@
             width: 100%;
             max-width: 900px;
             height: 500px; 
-            touch-action: none; 
+            touch-action: none; /* Crucial para evitar que el arrastre en el canvas haga scroll de la página */
             cursor: default;
         }
-        /* Cursors */
+        /* Cursors for internal canvas interaction */
         .rotating { cursor: grab !important; }
         .dragging { cursor: grab !important; }
         .resizer-ns { cursor: ns-resize !important; } 
         .resizer-ew { cursor: ew-resize !important; } 
         .move-vertex { cursor: move !important; }
         .panning { cursor: all-scroll !important; } 
+
     </style>
 </head>
 <body class="p-4 flex flex-col items-center justify-start">
 
-    <header class="text-center mb-8 w-full max-w-2xl">
-        <h1 class="text-4xl font-extrabold text-gray-900 mb-2">
-            📐 Editor de Figuras Avanzado (Solo Interacción Visual)
+    <header class="text-center mb-8 w-full max-w-3xl">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-2">
+            📐 Editor de Figuras Avanzado
         </h1>
-        <p class="text-gray-600 text-base">
-            Edita formas arrastrando sus vértices y controles. 
-            <br>
-            <span class="font-semibold text-sky-800">Escala para referencia: 10 píxeles = 1 cm.</span>
+        <p class="text-gray-600 text-sm sm:text-base">
+            Usa el arrastre del ratón o la rueda para navegar y hacer zoom en el lienzo.
+            <span class="font-semibold text-sky-800">Escala: 10 píxeles = 1 cm.</span>
         </p>
     </header>
 
@@ -57,48 +59,63 @@
             Triángulo Libre
         </button>
         <button onclick="clearCanvas()" class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-xl transition duration-300 shadow-md">
-            Limpiar
+            Limpiar Todo
         </button>
     </div>
     
-    <!-- Botón de Regularización, Controles de Zoom -->
-    <div class="mb-6 w-full max-w-3xl flex justify-between items-start gap-4 flex-wrap">
-        <!-- Regularizar -->
-        <div id="regularizeButtonContainer" class="hidden min-w-[150px]">
-            <button id="regularizeButton" onclick="regularizeShape()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl transition duration-300 shadow-lg text-sm sm:text-base">
-                Establecer Forma Regular
-            </button>
+    <!-- Controles de Edición y Zoom -->
+    <div class="mb-4 w-full max-w-[920px] flex justify-between items-start gap-4 flex-wrap">
+        
+        <!-- Controles de Edición de Figura Seleccionada -->
+        <div class="flex items-start gap-4 flex-wrap" id="shapeControlsContainer">
+            <!-- Botón de Regularización -->
+            <div id="regularizeButtonContainer" class="hidden min-w-[150px] mt-2">
+                <button id="regularizeButton" onclick="regularizeShape()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl transition duration-300 shadow-lg text-sm sm:text-base">
+                    Establecer Forma Regular
+                </button>
+            </div>
+            
+            <!-- Botón de Eliminación (NUEVO) -->
+            <div id="deleteButtonContainer" class="hidden min-w-[150px] mt-2">
+                <button id="deleteShapeButton" onclick="deleteSelectedShape()" class="bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-6 rounded-xl transition duration-300 shadow-lg text-sm sm:text-base">
+                    Eliminar Figura Seleccionada
+                </button>
+            </div>
         </div>
 
         <!-- Controles de Zoom -->
-        <div class="flex items-center space-x-2 p-2 bg-white rounded-xl shadow-lg self-start ml-auto">
+        <div class="flex items-center space-x-6 ml-auto mt-2 p-2 bg-white rounded-xl shadow-lg self-start">
+            <!-- Botón de disminuir (-) -->
             <button onclick="zoom(1/1.1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold w-10 h-10 rounded-full transition duration-150 text-xl">-</button>
             <span id="zoomLevel" class="text-sm font-semibold text-gray-700 w-12 text-center">100%</span>
+            <!-- Botón de aumentar (+) -->
             <button onclick="zoom(1.1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold w-10 h-10 rounded-full transition duration-150 text-xl">+</button>
         </div>
     </div>
 
     <!-- Área de dibujo -->
-    <div class="w-full flex justify-center">
-        <canvas id="geometricCanvas" class="rounded-xl"></canvas>
+    <div class="w-full flex justify-center flex-col max-w-[900px] relative">
+        <canvas id="geometricCanvas" class="rounded-xl flex-grow"></canvas>
     </div>
 
     <script>
         const canvas = document.getElementById("geometricCanvas");
         const ctx = canvas.getContext("2d");
         const regularizeButtonContainer = document.getElementById('regularizeButtonContainer');
+        const deleteButtonContainer = document.getElementById('deleteButtonContainer'); 
         const zoomLevelSpan = document.getElementById('zoomLevel');
-
+        
         // --- Configuración y Estado Global ---
         const DEG_TO_RAD = Math.PI / 180;
-        const PIXELS_PER_CM = 10; // Definición de la escala: 10 píxeles = 1 cm
+        const PIXELS_PER_CM = 10; 
         
         let shapes = []; 
         let selectedShape = null; 
         let actionState = null; 
         let dragOffset = { x: 0, y: 0 }; 
         let resizeControlIndex = -1; 
-        const controlSize = 8;
+        
+        const controlSize = 14; 
         const minRadius = 5;
 
         // --- Variables de Zoom y Panorámica ---
@@ -116,6 +133,7 @@
             const rect = canvas.getBoundingClientRect();
             let clientX = e.clientX;
             let clientY = e.clientY;
+            
             if (e.touches && e.touches.length) {
                 clientX = e.touches[0].clientX;
                 clientY = e.touches[0].clientY;
@@ -129,7 +147,6 @@
         function getWorldPos(e) {
             const screenPos = getScreenPos(e);
             return {
-                // Un-pan and un-scale
                 x: (screenPos.x - offsetX) / scale,
                 y: (screenPos.y - offsetY) / scale
             };
@@ -174,10 +191,7 @@
             return Math.sqrt(dx * dx + dy * dy);
         }
 
-        // -----------------------------------------------------
-        // CÁLCULO DE CONTROLES
-        // -----------------------------------------------------
-
+        // --- Funciones para Controles de Forma ---
         function getPolygonControls(shape) {
             const controls = { resize: [], rotate: null };
             const vertices = shape.vertices;
@@ -185,7 +199,6 @@
             const maxDimension = Math.max(bb.width, bb.height);
             const vertexCount = vertices.length;
 
-            // Vértices (corners)
             for (let i = 0; i < vertexCount; i++) {
                 const globalPos = localToGlobal(vertices[i].x, vertices[i].y, shape);
                 controls.resize.push({
@@ -194,7 +207,6 @@
                 });
             }
 
-            // Puntos medios de las aristas (midpoints)
             for (let i = 0; i < vertexCount; i++) {
                 const v1 = vertices[i];
                 const v2 = vertices[(i + 1) % vertexCount]; 
@@ -228,7 +240,6 @@
                 let localX = halfW * data.xLocal;
                 let localY = halfH * data.yLocal;
                 
-                // Add a slight margin outside the shape for easier clicking
                 localX += (data.xLocal !== 0 ? (data.xLocal > 0 ? margin : -margin) : 0);
                 localY += (data.yLocal !== 0 ? (data.yLocal > 0 ? margin : -margin) : 0);
 
@@ -254,7 +265,6 @@
                 ({ controls, maxDimension } = getEllipseControls(shape));
             }
             
-            // Rotation Control (always positioned diagonally from the center)
             if (maxDimension > 0) {
                 const rotationControlDistance = (maxDimension / 2) + (40 / scale); 
                 const rotateAngle = shape.rotation + (225 * DEG_TO_RAD); 
@@ -269,9 +279,8 @@
             return controls;
         }
 
-        // -----------------------------------------------------
-        // DIBUJO
-        // -----------------------------------------------------
+
+        // --- DIBUJO ---
 
         function getRandomColor() {
             const colors = ['#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#8b5cf6'];
@@ -295,9 +304,6 @@
             ctx.restore();
         }
 
-        /**
-         * Draws and labels the side lengths of a polygon.
-         */
         function drawPolygonSideLabels(shape) {
             if (shape !== selectedShape || (shape.type !== 'rectangle' && shape.type !== 'triangle')) {
                 return;
@@ -335,7 +341,6 @@
 
                 const textYOffset = -15 / scale; 
                 
-                // White stroke for text visibility against the shape
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 4 / scale;
                 ctx.strokeText(`${lengthCm} cm`, 0, textYOffset); 
@@ -400,7 +405,6 @@
                 }
                
                 if (shape.type === 'circle') {
-                    // Draw dimension labels for circle
                     const dimensions = [
                         { label: 'Rx', value: (shape.rx / PIXELS_PER_CM).toFixed(2) },
                         { label: 'Ry', value: (shape.ry / PIXELS_PER_CM).toFixed(2) }
@@ -438,7 +442,7 @@
 
             ctx.restore(); 
             
-            updateRegularizeButtonVisibility();
+            updateControlButtonsVisibility(); 
             updateZoomLevelDisplay();
         }
 
@@ -464,7 +468,7 @@
                 drawShapes();
             }
         }
-
+        
         function handleWheel(e) {
             e.preventDefault(); 
             const screenPos = getScreenPos(e); 
@@ -486,16 +490,27 @@
         window.addEventListener('resize', resizeCanvas);
         window.onload = resizeCanvas; 
 
-        function updateRegularizeButtonVisibility() {
-            if (selectedShape) {
+        function updateControlButtonsVisibility() {
+            const isShapeSelected = selectedShape !== null;
+            const isRegularizable = isShapeSelected && (selectedShape.type === 'circle' || selectedShape.type === 'rectangle' || selectedShape.type === 'triangle');
+            
+            if (isRegularizable) {
                 regularizeButtonContainer.classList.remove('hidden');
             } else {
                 regularizeButtonContainer.classList.add('hidden');
+            }
+            
+            // Show/Hide Delete Button
+            if (isShapeSelected) {
+                deleteButtonContainer.classList.remove('hidden');
+            } else {
+                deleteButtonContainer.classList.add('hidden');
             }
         }
 
         function addShape(type) {
             const color = getRandomColor();
+            // Center in the current view
             const x = (canvas.width / 2 - offsetX) / scale; 
             const y = (canvas.height / 2 - offsetY) / scale;
             let newShape;
@@ -532,6 +547,18 @@
 
         function clearCanvas() {
             shapes = [];
+            selectedShape = null;
+            drawShapes();
+        }
+        
+        // Función para eliminar la figura seleccionada
+        function deleteSelectedShape() {
+            if (!selectedShape) return;
+
+            const index = shapes.indexOf(selectedShape);
+            if (index > -1) {
+                shapes.splice(index, 1);
+            }
             selectedShape = null;
             drawShapes();
         }
@@ -574,7 +601,7 @@
 
 
         // -----------------------------------------------------
-        // INTERACCIÓN (MOVIMIENTO Y EDICIÓN)
+        // INTERACCIÓN (Manejadores de Mouse/Touch)
         // -----------------------------------------------------
 
         function isPointInShape(mx, my, shape) {
@@ -585,7 +612,6 @@
             } 
             
             if (shape.type === 'rectangle' || shape.type === 'triangle') {
-                // Simplified Bounding Box hit test for polygons
                 const bb = getBoundingBox(shape.vertices);
                 const minX = bb.minX;
                 const maxX = bb.maxX;
@@ -602,9 +628,8 @@
             if (!shape) return { action: null, index: -1, cursor: 'default' };
 
             const controls = getShapeControls(shape);
-            const tolerance = 10 / scale; 
+            const tolerance = 15 / scale; 
             
-            // 1. Rotation Control
             if (controls.rotate) {
                 const distRotate = Math.sqrt(Math.pow(mx - controls.rotate.x, 2) + Math.pow(my - controls.rotate.y, 2));
                 if (distRotate < controls.rotate.size + tolerance) {
@@ -612,7 +637,6 @@
                 }
             }
 
-            // 2. Resize/Vertex Controls
             for (const ctrl of controls.resize) {
                 const distResize = Math.sqrt(Math.pow(mx - ctrl.x, 2) + Math.pow(my - ctrl.y, 2));
                 if (distResize < ctrl.size + tolerance) {
@@ -628,13 +652,11 @@
             const vertexCount = vertices.length;
             
             if (resizeControlIndex < vertexCount) {
-                // Moving a vertex (corner)
                 const vertexIndex = resizeControlIndex;
                 vertices[vertexIndex].x = localMouseX;
                 vertices[vertexIndex].y = localMouseY;
                 
             } else {
-                // Moving a midpoint (translates the edge)
                 const edgeIndex = resizeControlIndex - vertexCount;
                 const v1Index = edgeIndex;
                 const v2Index = (edgeIndex + 1) % vertexCount;
@@ -664,18 +686,15 @@
             }
         }
 
-        // -----------------------------------------------------
-        // MANEJADORES DE EVENTOS
-        // -----------------------------------------------------
-
         let lastHit = null; 
 
         function handleMouseDown(e) {
-            e.preventDefault();
+            e.preventDefault(); 
+            
             const worldPos = getWorldPos(e); 
             const screenPos = getScreenPos(e); 
             
-            // Check if click is on canvas
+            // Si el click no es en el canvas, ignorar
             if (e.target !== canvas) {
                 return;
             }
@@ -685,7 +704,7 @@
             resizeControlIndex = -1;
             lastHit = null;
 
-            // 1. Try to hit a control or a shape
+            // 1. Intentar golpear un control o una forma
             for (let i = 0; i < shapes.length; i++) {
                 const shape = shapes[i];
                 const hit = getControlHit(worldPos.x, worldPos.y, shape);
@@ -697,7 +716,6 @@
                     canvas.className = hit.cursor;
                     lastHit = hit; 
                     
-                    // Bring to front
                     shapes.splice(i, 1);
                     shapes.unshift(selectedShape);
                     break;
@@ -708,14 +726,13 @@
                     dragOffset.y = worldPos.y - shape.y;
                     canvas.className = 'dragging';
 
-                    // Bring to front
                     shapes.splice(i, 1);
                     shapes.unshift(selectedShape);
                     break;
                 }
             }
             
-            // 2. If no shape was selected, start PANNING
+            // 2. Si no se seleccionó nada, iniciar PANNING (arrastrar la vista)
             if (!selectedShape) {
                 actionState = 'pan';
                 dragOffset.x = screenPos.x; 
@@ -727,11 +744,12 @@
         }
 
         function handleMouseMove(e) {
-            e.preventDefault();
+            e.preventDefault(); 
+            
             const worldPos = getWorldPos(e); 
             const screenPos = getScreenPos(e); 
 
-            // Panning Logic
+            // Lógica de Panning (Movimiento de la vista por arrastre del canvas)
             if (actionState === 'pan') {
                 const dx = screenPos.x - dragOffset.x;
                 const dy = screenPos.y - dragOffset.y;
@@ -742,12 +760,12 @@
                 dragOffset.x = screenPos.x;
                 dragOffset.y = screenPos.y;
 
-                drawShapes();
+                drawShapes(); 
                 return;
             }
             
-            if (!selectedShape || actionState === null) {
-                // Hover cursor logic
+            // Lógica de Hover del Cursor (Solo para mouse)
+            if (actionState === null && !e.touches) {
                 let hoverAction = 'default';
                 for(const shape of shapes) {
                     const hit = getControlHit(worldPos.x, worldPos.y, shape);
@@ -762,6 +780,9 @@
                 canvas.className = hoverAction;
                 return;
             }
+
+            // Lógica de Interacción con la Forma
+            if (!selectedShape) return; 
 
             if (actionState === 'rotate') {
                 const dx = worldPos.x - selectedShape.x;
@@ -781,8 +802,6 @@
             } else if (actionState === 'drag') {
                 selectedShape.x = worldPos.x - dragOffset.x;
                 selectedShape.y = worldPos.y - dragOffset.y;
-            } else {
-                return;
             }
             
             drawShapes();
@@ -801,17 +820,19 @@
         // LISTENERS
         // -----------------------------------------------------
 
+        // Eventos de Mouse
         canvas.addEventListener('mousedown', handleMouseDown);
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
         
-        // Touch Support
-        canvas.addEventListener('touchstart', handleMouseDown);
+        // Eventos Táctiles (Touch)
+        canvas.addEventListener('touchstart', handleMouseDown); 
+        // Se deja passive: false para que e.preventDefault() funcione correctamente
         document.addEventListener('touchmove', handleMouseMove, { passive: false });
         document.addEventListener('touchend', handleMouseUp);
         document.addEventListener('touchcancel', handleMouseUp);
         
-        // Wheel Listener for Zoom
+        // Evento de Rueda para Zoom (escritorio)
         canvas.addEventListener('wheel', handleWheel, { passive: false });
         
     </script>
