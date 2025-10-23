@@ -688,12 +688,14 @@
         let lastHit = null; 
 
         function handleMouseDown(e) {
+            // Este preventDefault es correcto porque solo escucha en el canvas, 
+            // asegurando que un toque inicial en el canvas se destine al dibujo/panorámica y no al scroll de la página.
             e.preventDefault(); 
             
             const worldPos = getWorldPos(e); 
             const screenPos = getScreenPos(e); 
             
-            // Si el click no es en el canvas, ignorar
+            // Si el click no es en el canvas, ignorar (aunque el listener solo está en el canvas)
             if (e.target !== canvas) {
                 return;
             }
@@ -743,7 +745,13 @@
         }
 
         function handleMouseMove(e) {
-            e.preventDefault(); 
+            
+            // ** CORRECCIÓN CLAVE PARA EL SCROLL MÓVIL **
+            // Solo prevenimos la acción por defecto (scroll de página) si actionState 
+            // no es nulo, es decir, si estamos arrastrando activamente una forma o el lienzo.
+            if (actionState !== null) {
+                e.preventDefault(); 
+            }
             
             const worldPos = getWorldPos(e); 
             const screenPos = getScreenPos(e); 
@@ -780,6 +788,9 @@
                 canvas.className = hoverAction;
                 return;
             }
+
+            // Si actionState es nulo (y no es mouse), salimos para permitir el scroll de la página.
+            if (actionState === null) return;
 
             // Lógica de Interacción con la Forma
             if (!selectedShape) return; 
@@ -827,7 +838,7 @@
         
         // Eventos Táctiles (Touch)
         canvas.addEventListener('touchstart', handleMouseDown); 
-        // Se deja passive: false para que e.preventDefault() funcione correctamente
+        // El listener en el documento es necesario para que el arrastre continúe fuera del canvas.
         document.addEventListener('touchmove', handleMouseMove, { passive: false });
         document.addEventListener('touchend', handleMouseUp);
         document.addEventListener('touchcancel', handleMouseUp);
@@ -838,4 +849,3 @@
     </script>
 </body>
 </html>
-
