@@ -10,10 +10,9 @@
         /* Estilos base y cursores personalizados */
         body {
             font-family: 'Inter', sans-serif;
-            /* Se eliminó min-height: 100vh para permitir el scroll nativo en móviles */
             background-color: #e2e8f0; /* Slate-200 */
-            /* Aseguramos que la página ocupe el ancho completo */
-            width: 100%; 
+            min-height: 100vh; /* Establece una altura mínima para el flex container del body */
+            overflow-y: auto; /* Asegura el scroll vertical si el contenido excede el viewport */
         }
         #geometricCanvas {
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
@@ -696,6 +695,8 @@
             
             // Si el click no es en el canvas, ignorar
             if (e.target !== canvas) {
+                // Aquí podrías permitir el scroll nativo si fuera necesario, 
+                // pero ya está manejado por la estructura del DOM.
                 return;
             }
 
@@ -765,6 +766,7 @@
             }
             
             // Lógica de Hover del Cursor (Solo para mouse)
+            // e.touches es undefined o false si es evento de mouse
             if (actionState === null && !e.touches) {
                 let hoverAction = 'default';
                 for(const shape of shapes) {
