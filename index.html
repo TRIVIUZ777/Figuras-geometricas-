@@ -190,7 +190,12 @@
         const PAN_LIMIT = 300; 
 
         // --- Configuración de la API de Gemini ---
-        const apiKey = "";
+        // -------------------------------------------------------------------------------------------
+        // ¡IMPORTANTE! Para usar la IA en GitHub, DEBES reemplazar "TU_CLAVE_AQUI" con tu clave API de Gemini.
+        // Puedes obtenerla en Google AI Studio.
+        // ADVERTENCIA: No publiques claves API en repositorios públicos sin medidas de seguridad adicionales.
+        const apiKey = "AIzaSyBcHgv5wwAG2V_8ckbVZ3EEki1vhXG4AJA"; 
+        // -------------------------------------------------------------------------------------------
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
         
         // -----------------------------------------------------
@@ -814,6 +819,10 @@
         }
         
         async function callGeminiAI(prompt) {
+             if (apiKey === "TU_CLAVE_AQUI") {
+                return "Error: Clave API de Gemini no configurada. Por favor, reemplaza 'TU_CLAVE_AQUI' en el código con tu clave para habilitar la IA.";
+            }
+            
             let attempt = 0;
             const maxAttempts = 3;
             const baseDelay = 1000; // 1 second
