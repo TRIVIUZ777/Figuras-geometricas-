@@ -20,28 +20,28 @@
             width: 100%;
             max-width: 900px;
             height: 500px; 
-            touch-action: none; /* CRUCIAL para evitar que el navegador capture el gesto de arrastre */
+            touch-action: none; 
             cursor: default;
         }
-        /* Cursors */
+        /* Cursors for internal canvas interaction */
         .rotating { cursor: grab !important; }
         .dragging { cursor: grab !important; }
         .resizer-ns { cursor: ns-resize !important; } 
         .resizer-ew { cursor: ew-resize !important; } 
         .move-vertex { cursor: move !important; }
         .panning { cursor: all-scroll !important; } 
+
     </style>
 </head>
 <body class="p-4 flex flex-col items-center justify-start">
 
-    <header class="text-center mb-8 w-full max-w-2xl">
-        <h1 class="text-4xl font-extrabold text-gray-900 mb-2">
-            📐 Editor de Figuras Avanzado (Solo Interacción Visual)
+    <header class="text-center mb-8 w-full max-w-3xl">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-2">
+            📐 Editor de Figuras Avanzado
         </h1>
-        <p class="text-gray-600 text-base">
-            Edita formas arrastrando sus vértices y controles. 
-            <br>
-            <span class="font-semibold text-sky-800">Escala para referencia: 10 píxeles = 1 cm.</span>
+        <p class="text-gray-600 text-sm sm:text-base">
+            Ahora con <span class="font-semibold text-red-600">barra de desplazamiento nativa de página</span>. Usa el arrastre del ratón o la rueda para navegar por el lienzo.
+            <span class="font-semibold text-sky-800">Escala: 10 píxeles = 1 cm.</span>
         </p>
     </header>
 
@@ -61,26 +61,36 @@
         </button>
     </div>
     
-    <!-- Botón de Regularización, Controles de Zoom -->
-    <div class="mb-6 w-full max-w-3xl flex justify-between items-start gap-4 flex-wrap">
-        <!-- Regularizar -->
-        <div id="regularizeButtonContainer" class="hidden min-w-[150px]">
+    <!-- Controles de Edición y Zoom -->
+    <div class="mb-4 w-full max-w-[920px] flex justify-between items-start gap-4 flex-wrap">
+        
+        <!-- Botón de Regularización -->
+        <div id="regularizeButtonContainer" class="hidden min-w-[150px] mt-2">
             <button id="regularizeButton" onclick="regularizeShape()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl transition duration-300 shadow-lg text-sm sm:text-base">
                 Establecer Forma Regular
             </button>
         </div>
 
         <!-- Controles de Zoom -->
-        <div class="flex items-center space-x-2 p-2 bg-white rounded-xl shadow-lg self-start ml-auto">
-            <button onclick="zoom(1/1.1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold w-10 h-10 rounded-full transition duration-150 text-xl">-</button>
-            <span id="zoomLevel" class="text-sm font-semibold text-gray-700 w-12 text-center">100%</span>
+        <div class="flex items-center space-x-6 ml-auto mt-2 p-2 bg-white rounded-xl shadow-lg self-start">
             <button onclick="zoom(1.1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold w-10 h-10 rounded-full transition duration-150 text-xl">+</button>
+            <span id="zoomLevel" class="text-sm font-semibold text-gray-700 w-12 text-center">100%</span>
+            <button onclick="zoom(1/1.1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold w-10 h-10 rounded-full transition duration-150 text-xl">-</button>
         </div>
     </div>
 
     <!-- Área de dibujo -->
-    <div class="w-full flex justify-center">
-        <canvas id="geometricCanvas" class="rounded-xl"></canvas>
+    <div class="w-full flex justify-center flex-col max-w-[900px] relative">
+        <canvas id="geometricCanvas" class="rounded-xl flex-grow"></canvas>
+    </div>
+
+    <!-- 
+        Este bloque es CRÍTICO para forzar la aparición de la barra de desplazamiento NATURA de la página, 
+        ya que el contenido principal por sí mismo no suele desbordar la ventana.
+    -->
+    <div class="w-full max-w-3xl mt-12 mb-96 text-center text-gray-500 text-sm">
+        <p>Espacio de relleno para activar el scroll nativo de la página (la barra).</p>
+        <p>Puedes arrastrar el lienzo con el ratón o usar la rueda para navegar dentro de él.</p>
     </div>
 
     <script>
@@ -88,10 +98,10 @@
         const ctx = canvas.getContext("2d");
         const regularizeButtonContainer = document.getElementById('regularizeButtonContainer');
         const zoomLevelSpan = document.getElementById('zoomLevel');
-
+        
         // --- Configuración y Estado Global ---
         const DEG_TO_RAD = Math.PI / 180;
-        const PIXELS_PER_CM = 10; // Definición de la escala: 10 píxeles = 1 cm
+        const PIXELS_PER_CM = 10; 
         
         let shapes = []; 
         let selectedShape = null; 
@@ -99,9 +109,7 @@
         let dragOffset = { x: 0, y: 0 }; 
         let resizeControlIndex = -1; 
         
-        // Aumentado para mejor interacción táctil en móvil
-        const controlSize = 12; 
-        
+        const controlSize = 14; 
         const minRadius = 5;
 
         // --- Variables de Zoom y Panorámica ---
@@ -120,7 +128,6 @@
             let clientX = e.clientX;
             let clientY = e.clientY;
             
-            // Soporte para touch
             if (e.touches && e.touches.length) {
                 clientX = e.touches[0].clientX;
                 clientY = e.touches[0].clientY;
@@ -134,7 +141,6 @@
         function getWorldPos(e) {
             const screenPos = getScreenPos(e);
             return {
-                // Un-pan and un-scale
                 x: (screenPos.x - offsetX) / scale,
                 y: (screenPos.y - offsetY) / scale
             };
@@ -179,10 +185,7 @@
             return Math.sqrt(dx * dx + dy * dy);
         }
 
-        // -----------------------------------------------------
-        // CÁLCULO DE CONTROLES
-        // -----------------------------------------------------
-
+        // --- Funciones para Controles de Forma ---
         function getPolygonControls(shape) {
             const controls = { resize: [], rotate: null };
             const vertices = shape.vertices;
@@ -190,7 +193,6 @@
             const maxDimension = Math.max(bb.width, bb.height);
             const vertexCount = vertices.length;
 
-            // Vértices (corners)
             for (let i = 0; i < vertexCount; i++) {
                 const globalPos = localToGlobal(vertices[i].x, vertices[i].y, shape);
                 controls.resize.push({
@@ -199,7 +201,6 @@
                 });
             }
 
-            // Puntos medios de las aristas (midpoints)
             for (let i = 0; i < vertexCount; i++) {
                 const v1 = vertices[i];
                 const v2 = vertices[(i + 1) % vertexCount]; 
@@ -233,7 +234,6 @@
                 let localX = halfW * data.xLocal;
                 let localY = halfH * data.yLocal;
                 
-                // Add a slight margin outside the shape for easier clicking
                 localX += (data.xLocal !== 0 ? (data.xLocal > 0 ? margin : -margin) : 0);
                 localY += (data.yLocal !== 0 ? (data.yLocal > 0 ? margin : -margin) : 0);
 
@@ -259,7 +259,6 @@
                 ({ controls, maxDimension } = getEllipseControls(shape));
             }
             
-            // Rotation Control (always positioned diagonally from the center)
             if (maxDimension > 0) {
                 const rotationControlDistance = (maxDimension / 2) + (40 / scale); 
                 const rotateAngle = shape.rotation + (225 * DEG_TO_RAD); 
@@ -274,9 +273,8 @@
             return controls;
         }
 
-        // -----------------------------------------------------
-        // DIBUJO
-        // -----------------------------------------------------
+
+        // --- DIBUJO ---
 
         function getRandomColor() {
             const colors = ['#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#8b5cf6'];
@@ -300,9 +298,6 @@
             ctx.restore();
         }
 
-        /**
-         * Draws and labels the side lengths of a polygon.
-         */
         function drawPolygonSideLabels(shape) {
             if (shape !== selectedShape || (shape.type !== 'rectangle' && shape.type !== 'triangle')) {
                 return;
@@ -340,7 +335,6 @@
 
                 const textYOffset = -15 / scale; 
                 
-                // White stroke for text visibility against the shape
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 4 / scale;
                 ctx.strokeText(`${lengthCm} cm`, 0, textYOffset); 
@@ -405,7 +399,6 @@
                 }
                
                 if (shape.type === 'circle') {
-                    // Draw dimension labels for circle
                     const dimensions = [
                         { label: 'Rx', value: (shape.rx / PIXELS_PER_CM).toFixed(2) },
                         { label: 'Ry', value: (shape.ry / PIXELS_PER_CM).toFixed(2) }
@@ -462,7 +455,6 @@
             if (newScale !== oldScale) {
                 const scaleRatio = newScale / oldScale;
                 
-                // Adjust offset to zoom centered on the mouse/touch point
                 offsetX = mouseX - scaleRatio * (mouseX - offsetX);
                 offsetY = mouseY - scaleRatio * (mouseY - offsetY);
 
@@ -470,7 +462,7 @@
                 drawShapes();
             }
         }
-
+        
         function handleWheel(e) {
             e.preventDefault(); 
             const screenPos = getScreenPos(e); 
@@ -581,19 +573,17 @@
 
 
         // -----------------------------------------------------
-        // INTERACCIÓN (MOVIMIENTO Y EDICIÓN)
+        // INTERACCIÓN (Manejadores de Mouse/Touch)
         // -----------------------------------------------------
 
         function isPointInShape(mx, my, shape) {
             const { x: localX, y: localY } = globalToLocal(mx, my, shape);
 
             if (shape.type === 'circle') {
-                // Check if point is inside the ellipse
                 return (Math.pow(localX / shape.rx, 2) + Math.pow(localY / shape.ry, 2) <= 1);
             } 
             
             if (shape.type === 'rectangle' || shape.type === 'triangle') {
-                // Simplified Bounding Box hit test for polygons
                 const bb = getBoundingBox(shape.vertices);
                 const minX = bb.minX;
                 const maxX = bb.maxX;
@@ -610,10 +600,8 @@
             if (!shape) return { action: null, index: -1, cursor: 'default' };
 
             const controls = getShapeControls(shape);
-            // Tolerancia aumentada para móvil
             const tolerance = 15 / scale; 
             
-            // 1. Rotation Control
             if (controls.rotate) {
                 const distRotate = Math.sqrt(Math.pow(mx - controls.rotate.x, 2) + Math.pow(my - controls.rotate.y, 2));
                 if (distRotate < controls.rotate.size + tolerance) {
@@ -621,7 +609,6 @@
                 }
             }
 
-            // 2. Resize/Vertex Controls
             for (const ctrl of controls.resize) {
                 const distResize = Math.sqrt(Math.pow(mx - ctrl.x, 2) + Math.pow(my - ctrl.y, 2));
                 if (distResize < ctrl.size + tolerance) {
@@ -637,13 +624,11 @@
             const vertexCount = vertices.length;
             
             if (resizeControlIndex < vertexCount) {
-                // Moving a vertex (corner)
                 const vertexIndex = resizeControlIndex;
                 vertices[vertexIndex].x = localMouseX;
                 vertices[vertexIndex].y = localMouseY;
                 
             } else {
-                // Moving a midpoint (translates the edge)
                 const edgeIndex = resizeControlIndex - vertexCount;
                 const v1Index = edgeIndex;
                 const v2Index = (edgeIndex + 1) % vertexCount;
@@ -666,7 +651,6 @@
         function handleEllipseResize(shape, localMouseX, localMouseY, hit) {
             const axis = hit.axis;
             
-            // Only use the absolute value relative to the center for resizing
             if (axis === 'x') {
                 shape.rx = Math.max(minRadius, Math.abs(localMouseX));
             } else if (axis === 'y') {
@@ -674,22 +658,15 @@
             }
         }
 
-        // -----------------------------------------------------
-        // MANEJADORES DE EVENTOS
-        // -----------------------------------------------------
-
         let lastHit = null; 
 
         function handleMouseDown(e) {
-            // Evitar el scroll/zoom del navegador inmediatamente en touch
-            if (e.touches) {
-                e.preventDefault(); 
-            }
+            e.preventDefault(); 
             
             const worldPos = getWorldPos(e); 
             const screenPos = getScreenPos(e); 
             
-            // Check if click is on canvas
+            // Si el click no es en el canvas, ignorar
             if (e.target !== canvas) {
                 return;
             }
@@ -699,8 +676,7 @@
             resizeControlIndex = -1;
             lastHit = null;
 
-            // 1. Try to hit a control or a shape
-            // Iterar de adelante hacia atrás (lo último dibujado es lo primero)
+            // 1. Intentar golpear un control o una forma
             for (let i = 0; i < shapes.length; i++) {
                 const shape = shapes[i];
                 const hit = getControlHit(worldPos.x, worldPos.y, shape);
@@ -712,7 +688,6 @@
                     canvas.className = hit.cursor;
                     lastHit = hit; 
                     
-                    // Bring to front
                     shapes.splice(i, 1);
                     shapes.unshift(selectedShape);
                     break;
@@ -723,14 +698,13 @@
                     dragOffset.y = worldPos.y - shape.y;
                     canvas.className = 'dragging';
 
-                    // Bring to front
                     shapes.splice(i, 1);
                     shapes.unshift(selectedShape);
                     break;
                 }
             }
             
-            // 2. If no shape was selected, start PANNING (movimiento de la vista)
+            // 2. Si no se seleccionó nada, iniciar PANNING (arrastrar la vista)
             if (!selectedShape) {
                 actionState = 'pan';
                 dragOffset.x = screenPos.x; 
@@ -742,13 +716,12 @@
         }
 
         function handleMouseMove(e) {
-            // Evitar el scroll/zoom del navegador para que funcione el drag/pan
             e.preventDefault(); 
             
             const worldPos = getWorldPos(e); 
             const screenPos = getScreenPos(e); 
 
-            // Panning Logic (Movimiento de la vista)
+            // Lógica de Panning (Movimiento de la vista por arrastre del canvas)
             if (actionState === 'pan') {
                 const dx = screenPos.x - dragOffset.x;
                 const dy = screenPos.y - dragOffset.y;
@@ -759,31 +732,28 @@
                 dragOffset.x = screenPos.x;
                 dragOffset.y = screenPos.y;
 
-                drawShapes();
+                drawShapes(); 
                 return;
             }
             
-            // Cursor Hover Logic (Solo para mouse)
-            if (actionState === null) {
-                // Solo aplicar cursores en escritorio, no en touch
-                if (!e.touches) { 
-                    let hoverAction = 'default';
-                    for(const shape of shapes) {
-                        const hit = getControlHit(worldPos.x, worldPos.y, shape);
-                        if (hit.action) {
-                            hoverAction = hit.cursor;
-                            break;
-                        } else if (isPointInShape(worldPos.x, worldPos.y, shape)) {
-                            hoverAction = 'dragging';
-                            break;
-                        }
+            // Lógica de Hover del Cursor (Solo para mouse)
+            if (actionState === null && !e.touches) {
+                let hoverAction = 'default';
+                for(const shape of shapes) {
+                    const hit = getControlHit(worldPos.x, worldPos.y, shape);
+                    if (hit.action) {
+                        hoverAction = hit.cursor;
+                        break;
+                    } else if (isPointInShape(worldPos.x, worldPos.y, shape)) {
+                        hoverAction = 'dragging';
+                        break;
                     }
-                    canvas.className = hoverAction;
                 }
+                canvas.className = hoverAction;
                 return;
             }
 
-            // Shape Interaction Logic
+            // Lógica de Interacción con la Forma
             if (!selectedShape) return; 
 
             if (actionState === 'rotate') {
@@ -828,8 +798,7 @@
         document.addEventListener('mouseup', handleMouseUp);
         
         // Eventos Táctiles (Touch)
-        // Usamos document para touchmove/touchend/touchcancel para seguir el dedo si sale del canvas
-        canvas.addEventListener('touchstart', handleMouseDown);
+        canvas.addEventListener('touchstart', handleMouseDown); 
         document.addEventListener('touchmove', handleMouseMove, { passive: false });
         document.addEventListener('touchend', handleMouseUp);
         document.addEventListener('touchcancel', handleMouseUp);
