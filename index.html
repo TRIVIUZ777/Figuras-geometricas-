@@ -20,7 +20,7 @@
             width: 100%;
             max-width: 900px;
             height: 500px; 
-            touch-action: none; 
+            touch-action: none; /* CRUCIAL para evitar que el navegador capture el gesto de arrastre */
             cursor: default;
         }
         /* Cursors */
@@ -98,7 +98,10 @@
         let actionState = null; 
         let dragOffset = { x: 0, y: 0 }; 
         let resizeControlIndex = -1; 
-        const controlSize = 8;
+        
+        // Aumentado para mejor interacción táctil en móvil
+        const controlSize = 12; 
+        
         const minRadius = 5;
 
         // --- Variables de Zoom y Panorámica ---
@@ -116,6 +119,8 @@
             const rect = canvas.getBoundingClientRect();
             let clientX = e.clientX;
             let clientY = e.clientY;
+            
+            // Soporte para touch
             if (e.touches && e.touches.length) {
                 clientX = e.touches[0].clientX;
                 clientY = e.touches[0].clientY;
@@ -457,6 +462,7 @@
             if (newScale !== oldScale) {
                 const scaleRatio = newScale / oldScale;
                 
+                // Adjust offset to zoom centered on the mouse/touch point
                 offsetX = mouseX - scaleRatio * (mouseX - offsetX);
                 offsetY = mouseY - scaleRatio * (mouseY - offsetY);
 
@@ -487,7 +493,7 @@
         window.onload = resizeCanvas; 
 
         function updateRegularizeButtonVisibility() {
-            if (selectedShape) {
+            if (selectedShape && (selectedShape.type === 'circle' || selectedShape.type === 'rectangle' || selectedShape.type === 'triangle')) {
                 regularizeButtonContainer.classList.remove('hidden');
             } else {
                 regularizeButtonContainer.classList.add('hidden');
@@ -496,6 +502,7 @@
 
         function addShape(type) {
             const color = getRandomColor();
+            // Center in the current view
             const x = (canvas.width / 2 - offsetX) / scale; 
             const y = (canvas.height / 2 - offsetY) / scale;
             let newShape;
@@ -581,6 +588,7 @@
             const { x: localX, y: localY } = globalToLocal(mx, my, shape);
 
             if (shape.type === 'circle') {
+                // Check if point is inside the ellipse
                 return (Math.pow(localX / shape.rx, 2) + Math.pow(localY / shape.ry, 2) <= 1);
             } 
             
@@ -602,7 +610,8 @@
             if (!shape) return { action: null, index: -1, cursor: 'default' };
 
             const controls = getShapeControls(shape);
-            const tolerance = 10 / scale; 
+            // Tolerancia aumentada para móvil
+            const tolerance = 15 / scale; 
             
             // 1. Rotation Control
             if (controls.rotate) {
@@ -657,6 +666,7 @@
         function handleEllipseResize(shape, localMouseX, localMouseY, hit) {
             const axis = hit.axis;
             
+            // Only use the absolute value relative to the center for resizing
             if (axis === 'x') {
                 shape.rx = Math.max(minRadius, Math.abs(localMouseX));
             } else if (axis === 'y') {
@@ -671,7 +681,11 @@
         let lastHit = null; 
 
         function handleMouseDown(e) {
-            e.preventDefault();
+            // Evitar el scroll/zoom del navegador inmediatamente en touch
+            if (e.touches) {
+                e.preventDefault(); 
+            }
+            
             const worldPos = getWorldPos(e); 
             const screenPos = getScreenPos(e); 
             
@@ -686,6 +700,7 @@
             lastHit = null;
 
             // 1. Try to hit a control or a shape
+            // Iterar de adelante hacia atrás (lo último dibujado es lo primero)
             for (let i = 0; i < shapes.length; i++) {
                 const shape = shapes[i];
                 const hit = getControlHit(worldPos.x, worldPos.y, shape);
@@ -715,7 +730,7 @@
                 }
             }
             
-            // 2. If no shape was selected, start PANNING
+            // 2. If no shape was selected, start PANNING (movimiento de la vista)
             if (!selectedShape) {
                 actionState = 'pan';
                 dragOffset.x = screenPos.x; 
@@ -727,11 +742,13 @@
         }
 
         function handleMouseMove(e) {
-            e.preventDefault();
+            // Evitar el scroll/zoom del navegador para que funcione el drag/pan
+            e.preventDefault(); 
+            
             const worldPos = getWorldPos(e); 
             const screenPos = getScreenPos(e); 
 
-            // Panning Logic
+            // Panning Logic (Movimiento de la vista)
             if (actionState === 'pan') {
                 const dx = screenPos.x - dragOffset.x;
                 const dy = screenPos.y - dragOffset.y;
@@ -746,22 +763,28 @@
                 return;
             }
             
-            if (!selectedShape || actionState === null) {
-                // Hover cursor logic
-                let hoverAction = 'default';
-                for(const shape of shapes) {
-                    const hit = getControlHit(worldPos.x, worldPos.y, shape);
-                    if (hit.action) {
-                        hoverAction = hit.cursor;
-                        break;
-                    } else if (isPointInShape(worldPos.x, worldPos.y, shape)) {
-                        hoverAction = 'dragging';
-                        break;
+            // Cursor Hover Logic (Solo para mouse)
+            if (actionState === null) {
+                // Solo aplicar cursores en escritorio, no en touch
+                if (!e.touches) { 
+                    let hoverAction = 'default';
+                    for(const shape of shapes) {
+                        const hit = getControlHit(worldPos.x, worldPos.y, shape);
+                        if (hit.action) {
+                            hoverAction = hit.cursor;
+                            break;
+                        } else if (isPointInShape(worldPos.x, worldPos.y, shape)) {
+                            hoverAction = 'dragging';
+                            break;
+                        }
                     }
+                    canvas.className = hoverAction;
                 }
-                canvas.className = hoverAction;
                 return;
             }
+
+            // Shape Interaction Logic
+            if (!selectedShape) return; 
 
             if (actionState === 'rotate') {
                 const dx = worldPos.x - selectedShape.x;
@@ -781,8 +804,6 @@
             } else if (actionState === 'drag') {
                 selectedShape.x = worldPos.x - dragOffset.x;
                 selectedShape.y = worldPos.y - dragOffset.y;
-            } else {
-                return;
             }
             
             drawShapes();
@@ -801,17 +822,19 @@
         // LISTENERS
         // -----------------------------------------------------
 
+        // Eventos de Mouse
         canvas.addEventListener('mousedown', handleMouseDown);
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
         
-        // Touch Support
+        // Eventos Táctiles (Touch)
+        // Usamos document para touchmove/touchend/touchcancel para seguir el dedo si sale del canvas
         canvas.addEventListener('touchstart', handleMouseDown);
         document.addEventListener('touchmove', handleMouseMove, { passive: false });
         document.addEventListener('touchend', handleMouseUp);
         document.addEventListener('touchcancel', handleMouseUp);
         
-        // Wheel Listener for Zoom
+        // Evento de Rueda para Zoom (escritorio)
         canvas.addEventListener('wheel', handleWheel, { passive: false });
         
     </script>
